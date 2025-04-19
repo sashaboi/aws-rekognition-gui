@@ -131,6 +131,65 @@ def list_collections():
     except Exception as e:
         return jsonify({"error": "Failed to list collections", "detail": str(e)}), 500
 
+@app.route('/api/collections/<collection_id>', methods=['DELETE'])
+def delete_collection(collection_id):
+    if not rekognition_client:
+        return jsonify({"error": "AWS credentials not configured", "detail": "Please set your AWS credentials first"}), 401
+    try:
+        rekognition_client.delete_collection(CollectionId=collection_id)
+        return jsonify({"message": f"Collection '{collection_id}' deleted successfully"})
+    except rekognition_client.exceptions.ResourceNotFoundException:
+        return jsonify({"error": "Collection not found", "detail": f"Collection '{collection_id}' does not exist"}), 404
+    except Exception as e:
+        return jsonify({"error": "Failed to delete collection", "detail": str(e)}), 500
+
+@app.route('/api/collections/<collection_id>/faces/delete', methods=['POST'])
+def delete_faces_from_collection(collection_id):
+    if not rekognition_client:
+        return jsonify({"error": "AWS credentials not configured", "detail": "Please set your AWS credentials first"}), 401
+    data = request.json
+    face_ids = data.get('faceIds')
+    if not face_ids or not isinstance(face_ids, list):
+        return jsonify({"error": "No face IDs provided", "detail": "Provide a list of face IDs to delete"}), 400
+    try:
+        response = rekognition_client.delete_faces(CollectionId=collection_id, FaceIds=face_ids)
+        return jsonify({
+            "message": f"Deleted {len(response.get('DeletedFaces', []))} faces from collection '{collection_id}'",
+            "DeletedFaces": response.get('DeletedFaces', [])
+        })
+    except rekognition_client.exceptions.ResourceNotFoundException:
+        return jsonify({"error": "Collection not found", "detail": f"Collection '{collection_id}' does not exist"}), 404
+    except Exception as e:
+        return jsonify({"error": "Failed to delete faces", "detail": str(e)}), 500
+
+@app.route('/api/collections/<collection_id>/faces', methods=['POST'])
+def add_face_to_collection(collection_id):
+    if not rekognition_client:
+        return jsonify({"error": "AWS credentials not configured", "detail": "Please set your AWS credentials first"}), 401
+    
+    if 'image' not in request.files:
+        return jsonify({"error": "No image provided", "detail": "Please upload an image"}), 400
+    file = request.files['image']
+    is_valid, error = validate_file(file)
+    if not is_valid:
+        return jsonify({"error": error, "detail": error}), 400
+    try:
+        # Check if collection exists
+        try:
+            rekognition_client.describe_collection(CollectionId=collection_id)
+        except rekognition_client.exceptions.ResourceNotFoundException:
+            return jsonify({"error": "Collection not found", "detail": f"Collection '{collection_id}' does not exist"}), 404
+        image_bytes = file.read()
+        response = rekognition_client.index_faces(
+            CollectionId=collection_id,
+            Image={'Bytes': image_bytes},
+            DetectionAttributes=['ALL'],
+            MaxFaces=5
+        )
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({"error": "Failed to add face to collection", "detail": str(e)}), 500
+
 @app.route('/api/collections', methods=['POST'])
 def create_collection():
     if not rekognition_client:

@@ -5,6 +5,8 @@ A local desktop application with a browser-based GUI for interacting with AWS Re
 ## Features
 
 - List and describe Rekognition collections
+- Create and delete Rekognition collections
+- Add (index) and delete faces in collections
 - Search faces in collections using image upload
 - Detect labels in images
 - Local-only AWS credential management
@@ -39,6 +41,12 @@ A local desktop application with a browser-based GUI for interacting with AWS Re
    http://localhost:5000
    ```
 
+## Deleting Collections and Faces
+
+- **Delete a Collection:** Go to the Collections tab, select a collection, and click the delete button. Confirm the action in the dialog.
+- **Delete Faces:** You can delete faces from a collection by providing their Face IDs (obtained from search or add operations) in the delete faces dialog.
+- Both actions require the corresponding AWS IAM permissions (see above).
+
 ## AWS IAM Setup
 
 1. Create an IAM User:
@@ -57,7 +65,11 @@ A local desktop application with a browser-based GUI for interacting with AWS Re
                    "rekognition:ListCollections",
                    "rekognition:DescribeCollection",
                    "rekognition:SearchFacesByImage",
-                   "rekognition:DetectLabels"
+                   "rekognition:DetectLabels",
+                   "rekognition:CreateCollection",
+                   "rekognition:IndexFaces",
+                   "rekognition:DeleteCollection",
+                   "rekognition:DeleteFaces"
                ],
                "Resource": "*"
            }

@@ -256,6 +256,134 @@ function setupEventListeners() {
         });
     }
 
+    // Refresh dropdowns after tab switch or other triggers (optional)
+    // Example: document.getElementById('collections-tab-btn').addEventListener('click', populateAllCollectionDropdowns);
+    // You can add more triggers as needed.
+
+
+    // Populate both collection dropdowns (search faces and add photo)
+    const addPhotoCollectionSelect = document.getElementById('add-photo-collection-id');
+    const searchFacesCollectionSelect = document.getElementById('collection-id');
+    const deleteFacesCollectionSelect = document.getElementById('delete-faces-collection-id');
+
+    async function populateAllCollectionDropdowns() {
+        // Helper to fill a dropdown
+        function fillDropdown(dropdown, collections, errorMsg) {
+            if (!dropdown) return;
+            dropdown.innerHTML = '';
+            if (collections && collections.length > 0) {
+                collections.forEach(cid => {
+                    const opt = document.createElement('option');
+                    opt.value = cid;
+                    opt.textContent = cid;
+                    dropdown.appendChild(opt);
+                });
+            } else {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = errorMsg || 'No collections available';
+                dropdown.appendChild(opt);
+            }
+        }
+        try {
+            const response = await fetch('/api/collections');
+            const data = await response.json();
+            if (response.ok && data.CollectionIds) {
+                fillDropdown(addPhotoCollectionSelect, data.CollectionIds);
+                fillDropdown(searchFacesCollectionSelect, data.CollectionIds);
+                fillDropdown(deleteFacesCollectionSelect, data.CollectionIds);
+            } else {
+                fillDropdown(addPhotoCollectionSelect, [], 'No collections available');
+                fillDropdown(searchFacesCollectionSelect, [], 'No collections available');
+                fillDropdown(deleteFacesCollectionSelect, [], 'No collections available');
+            }
+        } catch (err) {
+            fillDropdown(addPhotoCollectionSelect, [], 'Error loading collections');
+            fillDropdown(searchFacesCollectionSelect, [], 'Error loading collections');
+            fillDropdown(deleteFacesCollectionSelect, [], 'Error loading collections');
+        }
+    }
+    // Populate on load
+    populateAllCollectionDropdowns();
+    // Also refresh after creating a collection
+    window.populateAllCollectionDropdowns = populateAllCollectionDropdowns;
+
+    // Add photo to collection form
+    const photoToCollectionForm = document.getElementById('photo-to-collection-form');
+    if (photoToCollectionForm) {
+        photoToCollectionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await addPhotoToCollection();
+        });
+    }
+
+    // Delete faces from collection form
+    const deleteFacesForm = document.getElementById('delete-faces-from-collection-form');
+    if (deleteFacesForm) {
+        deleteFacesForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await deleteFacesFromCollection();
+        });
+    }
+
+    // Render collections list with delete buttons
+    async function listCollections() {
+        const collectionsListDiv = document.getElementById('collections-list');
+        if (!collectionsListDiv) return;
+        collectionsListDiv.innerHTML = '';
+        try {
+            const response = await fetch('/api/collections');
+            const data = await response.json();
+            if (response.ok && data.CollectionIds && data.CollectionIds.length > 0) {
+                const ul = document.createElement('ul');
+                data.CollectionIds.forEach(cid => {
+                    const li = document.createElement('li');
+                    li.textContent = cid + ' ';
+                    const delBtn = document.createElement('button');
+                    delBtn.textContent = 'Delete';
+                    delBtn.className = 'delete-collection-btn';
+                    delBtn.addEventListener('click', () => confirmDeleteCollection(cid));
+                    li.appendChild(delBtn);
+                    ul.appendChild(li);
+                });
+                collectionsListDiv.appendChild(ul);
+            } else {
+                collectionsListDiv.textContent = 'No collections found.';
+            }
+        } catch (err) {
+            collectionsListDiv.textContent = 'Error loading collections.';
+        }
+    }
+    // Call on load
+    listCollections();
+    window.listCollections = listCollections;
+
+    // Delete collection handler
+    async function confirmDeleteCollection(collectionId) {
+        if (!confirm(`Are you sure you want to delete collection '${collectionId}'? This cannot be undone.`)) return;
+        updateApiStatus('loading', 'Deleting collection');
+        logMessage(`Deleting collection: ${collectionId}`);
+        try {
+            const response = await fetch(`/api/collections/${encodeURIComponent(collectionId)}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            if (response.ok) {
+                updateApiStatus('success', 'Deleting collection');
+                logMessage(data.message, 'success');
+                await listCollections();
+                await populateAllCollectionDropdowns();
+            } else {
+                updateApiStatus('error', 'Deleting collection');
+                logMessage(`Error: ${data.detail || data.error || 'Failed to delete collection'}`, 'error');
+            }
+        } catch (error) {
+            updateApiStatus('error', 'Deleting collection');
+            logMessage(`Delete collection operation failed: ${error.message}`, 'error');
+        }
+    }
+
+
     // Handle credentials submission
     credentialsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -369,6 +497,8 @@ async function checkHealth() {
 }
 
 async function setCredentials(credentials) {
+    // After credentials are set, refresh all dropdowns
+    await populateAllCollectionDropdowns();
     // Clear previous logs
     clearLogs();
     
@@ -452,6 +582,108 @@ async function listCollections() {
     }
 }
 
+async function addPhotoToCollection() {
+    clearLogs();
+    const resultDiv = document.getElementById('add-photo-result');
+    if (resultDiv) resultDiv.innerHTML = '';
+    const collectionId = document.getElementById('add-photo-collection-id').value;
+    const imageInput = document.getElementById('add-photo-image');
+    const imageFile = imageInput.files[0];
+    if (!collectionId) {
+        updateStatusBanner('Please select a collection', 'error');
+        logMessage('Error: No collection selected', 'error');
+        return;
+    }
+    if (!imageFile) {
+        updateStatusBanner('Please select an image', 'error');
+        logMessage('Error: No image selected', 'error');
+        return;
+    }
+    updateApiStatus('loading', 'Adding photo to collection');
+    logMessage(`Adding photo to collection: ${collectionId}`);
+    try {
+        const formData = new FormData();
+        formData.append('image', imageFile);
+        const response = await fetch(`/api/collections/${encodeURIComponent(collectionId)}/faces`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        if (response.ok) {
+            updateApiStatus('success', 'Adding photo to collection');
+            logMessage('Photo added and face(s) indexed successfully', 'success');
+            if (resultDiv) {
+                if (data.FaceRecords && data.FaceRecords.length > 0) {
+                    resultDiv.innerHTML = `<b>Indexed Faces:</b><ul>` +
+                        data.FaceRecords.map(r => `<li>FaceId: ${r.Face.FaceId}, Confidence: ${r.Face.Confidence.toFixed(2)}%</li>`).join('') +
+                        `</ul>`;
+                } else {
+                    resultDiv.innerHTML = '<b>No faces detected in the image.</b>';
+                }
+            }
+        } else {
+            updateApiStatus('error', 'Adding photo to collection');
+            if (data.detail) logMessage(`Error: ${data.detail}`, 'error');
+            if (resultDiv) resultDiv.innerHTML = `<span class="error">${data.detail || data.error || 'Failed to add photo'}</span>`;
+            throw new Error(data.error || 'Failed to add photo');
+        }
+    } catch (error) {
+        updateApiStatus('error', 'Adding photo to collection');
+        showError(error.message);
+        logMessage(`Add photo operation failed: ${error.message}`, 'error');
+    }
+}
+
+async function deleteFacesFromCollection() {
+    clearLogs();
+    const resultDiv = document.getElementById('delete-faces-result');
+    if (resultDiv) resultDiv.innerHTML = '';
+    const collectionId = document.getElementById('delete-faces-collection-id').value;
+    const faceIdsRaw = document.getElementById('delete-face-ids').value;
+    if (!collectionId) {
+        updateStatusBanner('Please select a collection', 'error');
+        logMessage('Error: No collection selected', 'error');
+        return;
+    }
+    if (!faceIdsRaw) {
+        updateStatusBanner('Please enter Face IDs', 'error');
+        logMessage('Error: No Face IDs provided', 'error');
+        return;
+    }
+    // Split by comma, newline, or whitespace, and filter empty
+    const faceIds = faceIdsRaw.split(/[,\s\n]+/).map(s => s.trim()).filter(Boolean);
+    if (faceIds.length === 0) {
+        updateStatusBanner('Please enter valid Face IDs', 'error');
+        logMessage('Error: No valid Face IDs provided', 'error');
+        return;
+    }
+    updateApiStatus('loading', 'Deleting faces from collection');
+    logMessage(`Deleting faces from collection: ${collectionId}`);
+    try {
+        const response = await fetch(`/api/collections/${encodeURIComponent(collectionId)}/faces/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ faceIds })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            updateApiStatus('success', 'Deleting faces from collection');
+            logMessage(data.message, 'success');
+            if (resultDiv) {
+                resultDiv.innerHTML = `<b>Deleted Face IDs:</b> <br>${(data.DeletedFaces || []).join(', ')}`;
+            }
+        } else {
+            updateApiStatus('error', 'Deleting faces from collection');
+            logMessage(`Error: ${data.detail || data.error || 'Failed to delete faces'}`, 'error');
+            if (resultDiv) resultDiv.innerHTML = `<span class="error">${data.detail || data.error || 'Failed to delete faces'}</span>`;
+        }
+    } catch (error) {
+        updateApiStatus('error', 'Deleting faces from collection');
+        showError(error.message);
+        logMessage(`Delete faces operation failed: ${error.message}`, 'error');
+    }
+}
+
 async function createCollection() {
     // Clear previous logs
     clearLogs();
@@ -487,9 +719,9 @@ async function createCollection() {
             updateApiStatus('success', 'Creating collection');
             logMessage(`Collection '${newCollectionId}' created successfully with ARN: ${data.collectionArn}`, 'success');
             
-            // Refresh collections list and dropdown
+            // Refresh collections list and dropdowns
             await listCollections();
-            await loadCollectionsForDropdown();
+            await populateAllCollectionDropdowns();
         } else {
             updateApiStatus('error', 'Creating collection');
             

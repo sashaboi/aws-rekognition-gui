@@ -73,7 +73,39 @@
                         <button type="button" id="cancel-create-btn">Cancel</button>
                     </form>
                 </div>
+
+                <div id="add-photo-form" class="form-panel">
+                    <h3>Add Photo to Collection</h3>
+                    <form id="photo-to-collection-form">
+                        <div class="form-group">
+                            <label for="add-photo-collection-id">Select Collection:</label>
+                            <select id="add-photo-collection-id" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="add-photo-image">Upload Image:</label>
+                            <input type="file" id="add-photo-image" accept="image/*" required>
+                        </div>
+                        <button type="submit">Add Photo</button>
+                    </form>
+                    <div id="add-photo-result"></div>
+                </div>
                 
+                <div id="delete-faces-form" class="form-panel">
+                    <h3>Delete Faces from Collection</h3>
+                    <form id="delete-faces-from-collection-form">
+                        <div class="form-group">
+                            <label for="delete-faces-collection-id">Select Collection:</label>
+                            <select id="delete-faces-collection-id" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="delete-face-ids">Face IDs to Delete (comma or newline separated):</label>
+                            <textarea id="delete-face-ids" rows="3" required placeholder="Enter Face IDs..."></textarea>
+                        </div>
+                        <button type="submit">Delete Faces</button>
+                    </form>
+                    <div id="delete-faces-result"></div>
+                </div>
+
                 <div id="collections-list"></div>
             </div>
 
