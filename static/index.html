@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Rekognition GUI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>AWS Rekognition GUI</h1>
+            <div id="status-banner"></div>
+        </header>
+
+        <section id="credentials-section" class="section">
+            <h2>AWS Credentials</h2>
+            <form id="credentials-form">
+                <div class="form-group">
+                    <label for="access-key">Access Key ID:</label>
+                    <input type="text" id="access-key" required>
+                </div>
+                <div class="form-group">
+                    <label for="secret-key">Secret Access Key:</label>
+                    <input type="password" id="secret-key" required>
+                </div>
+                <div class="form-group">
+                    <label for="region">Region:</label>
+                    <select id="region" class="form-control">
+                        <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+                        <option value="us-east-2">US East (Ohio) - us-east-2</option>
+                        <option value="us-west-1">US West (N. California) - us-west-1</option>
+                        <option value="us-west-2">US West (Oregon) - us-west-2</option>
+                        <option value="eu-west-1">EU (Ireland) - eu-west-1</option>
+                        <option value="eu-central-1">EU (Frankfurt) - eu-central-1</option>
+                        <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
+                        <option value="ap-southeast-2">Asia Pacific (Sydney) - ap-southeast-2</option>
+                        <option value="ap-northeast-1">Asia Pacific (Tokyo) - ap-northeast-1</option>
+                        <option value="ap-south-1">Asia Pacific (Mumbai) - ap-south-1</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="save-credentials">
+                        Save credentials locally
+                    </label>
+                </div>
+                <button type="submit">Set Credentials</button>
+            </form>
+        </section>
+
+        <section id="operations-section" class="section hidden">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="collections">Collections</button>
+                <button class="tab-btn" data-tab="search-faces">Search Faces</button>
+                <button class="tab-btn" data-tab="detect-labels">Detect Labels</button>
+            </div>
+
+            <div id="collections" class="tab-content active">
+                <button id="list-collections-btn">List Collections</button>
+                <div id="collections-list"></div>
+            </div>
+
+            <div id="search-faces" class="tab-content">
+                <form id="search-faces-form">
+                    <div class="form-group">
+                        <label for="collection-id">Collection ID:</label>
+                        <input type="text" id="collection-id" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="face-image">Upload Image:</label>
+                        <input type="file" id="face-image" accept="image/*" required>
+                    </div>
+                    <button type="submit">Search Faces</button>
+                </form>
+                <div id="search-results"></div>
+            </div>
+
+            <div id="detect-labels" class="tab-content">
+                <form id="detect-labels-form">
+                    <div class="form-group">
+                        <label for="label-image">Upload Image:</label>
+                        <input type="file" id="label-image" accept="image/*" required>
+                    </div>
+                    <button type="submit">Detect Labels</button>
+                </form>
+                <div id="labels-results"></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Status Bar -->
+    <footer class="status-bar">
+        <div class="status-item" id="internet-status">
+            <i class="fas fa-wifi"></i>
+            <span>Internet: Checking...</span>
+        </div>
+        <div class="status-item" id="aws-status">
+            <i class="fas fa-cloud"></i>
+            <span>AWS: Not Connected</span>
+        </div>
+        <div class="status-item" id="api-status">
+            <i class="fas fa-sync"></i>
+            <span>Ready</span>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
