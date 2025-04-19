@@ -1,6 +1,16 @@
 # AWS Rekognition GUI
 
 A local desktop application with a browser-based GUI for interacting with AWS Rekognition services.
+## Screenshots
+
+Search faces against a collection : 
+![Screenshot 2025-04-19 at 12 20 07 PM](https://github.com/user-attachments/assets/c0c4789f-cea6-4855-ad2a-8da4a1d707b6)
+IAM user addition : 
+![Screenshot 2025-04-19 at 12 20 47 PM](https://github.com/user-attachments/assets/57338c37-aae5-44c0-939b-16dbbd601e55)
+Create Collection / add photo to collection :
+![Screenshot 2025-04-19 at 12 21 12 PM](https://github.com/user-attachments/assets/f4c0f977-f06a-4ccb-9f7e-aa13c446008d)
+Good errors are those who can be seen. Logs available : 
+![Screenshot 2025-04-19 at 12 24 11 PM](https://github.com/user-attachments/assets/d72c7e84-a1e4-4ce4-b51b-ca02fafa2f3e)
 
 ## Features
 
