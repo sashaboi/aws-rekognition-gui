@@ -60,10 +60,11 @@ def init_rekognition(access_key, secret_key, region='us-east-1'):
         )
         # Test the connection
         rekognition_client.list_collections(MaxResults=1)
-        return True
+        return True, ""
     except Exception as e:
-        print(f"Error initializing Rekognition: {str(e)}")
-        return False
+        error_message = str(e)
+        print(f"Error initializing Rekognition: {error_message}")
+        return False, error_message
 
 @app.route('/')
 def index():
@@ -111,23 +112,63 @@ def set_credentials():
     region = data.get('region', 'us-east-1')
     
     if not access_key or not secret_key:
-        return jsonify({"error": "Missing credentials"}), 400
+        return jsonify({"error": "Missing credentials", "detail": "Both Access Key and Secret Key are required"}), 400
     
-    if init_rekognition(access_key, secret_key, region):
+    success, error_message = init_rekognition(access_key, secret_key, region)
+    if success:
         return jsonify({"message": "Credentials set successfully"})
     else:
-        return jsonify({"error": "Invalid credentials"}), 401
+        return jsonify({"error": "Invalid credentials", "detail": error_message}), 401
 
 @app.route('/api/collections', methods=['GET'])
 def list_collections():
     if not rekognition_client:
-        return jsonify({"error": "AWS credentials not configured"}), 401
+        return jsonify({"error": "AWS credentials not configured", "detail": "Please set your AWS credentials first"}), 401
     
     try:
         response = rekognition_client.list_collections()
         return jsonify(response)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Failed to list collections", "detail": str(e)}), 500
+
+@app.route('/api/collections', methods=['POST'])
+def create_collection():
+    if not rekognition_client:
+        return jsonify({"error": "AWS credentials not configured", "detail": "Please set your AWS credentials first"}), 401
+    
+    data = request.json
+    collection_id = data.get('collectionId')
+    
+    if not collection_id:
+        return jsonify({"error": "Missing collection ID", "detail": "Collection ID is required"}), 400
+    
+    # Validate collection ID (alphanumeric with hyphens)
+    import re
+    if not re.match(r'^[a-zA-Z0-9\-_]+$', collection_id):
+        return jsonify({
+            "error": "Invalid collection ID format", 
+            "detail": "Collection ID must contain only alphanumeric characters, hyphens, and underscores"
+        }), 400
+    
+    try:
+        # Check if collection already exists
+        try:
+            rekognition_client.describe_collection(CollectionId=collection_id)
+            return jsonify({
+                "error": "Collection already exists", 
+                "detail": f"Collection '{collection_id}' already exists"
+            }), 409
+        except rekognition_client.exceptions.ResourceNotFoundException:
+            # Collection doesn't exist, so we can create it
+            response = rekognition_client.create_collection(CollectionId=collection_id)
+            return jsonify({
+                "message": "Collection created successfully",
+                "collectionId": collection_id,
+                "collectionArn": response.get('CollectionArn'),
+                "statusCode": response.get('StatusCode')
+            })
+    except Exception as e:
+        return jsonify({"error": "Failed to create collection", "detail": str(e)}), 500
 
 @app.route('/api/collections/<collection_id>', methods=['GET'])
 def describe_collection(collection_id):
@@ -146,21 +187,30 @@ def describe_collection(collection_id):
 @limiter.limit("10 per minute")
 def search_faces():
     if not rekognition_client:
-        return jsonify({"error": "AWS credentials not configured"}), 401
+        return jsonify({"error": "AWS credentials not configured", "detail": "Please set your AWS credentials first"}), 401
     
     if 'image' not in request.files:
-        return jsonify({"error": "No image provided"}), 400
+        return jsonify({"error": "No image provided", "detail": "Please select an image to upload"}), 400
         
     file = request.files['image']
     is_valid, error = validate_file(file)
     if not is_valid:
-        return jsonify({"error": error}), 400
+        return jsonify({"error": error, "detail": error}), 400
     
     collection_id = request.form.get('collectionId')
     if not collection_id:
-        return jsonify({"error": "No collection ID provided"}), 400
+        return jsonify({"error": "No collection ID provided", "detail": "Please select a collection ID"}), 400
     
     try:
+        # First check if the collection exists
+        try:
+            rekognition_client.describe_collection(CollectionId=collection_id)
+        except rekognition_client.exceptions.ResourceNotFoundException:
+            return jsonify({
+                "error": "Collection not found", 
+                "detail": f"Collection '{collection_id}' does not exist in your AWS account"
+            }), 404
+        
         file = request.files['image']
         image_bytes = file.read()
         
@@ -171,11 +221,14 @@ def search_faces():
         )
         return jsonify(response)
     except rekognition_client.exceptions.InvalidImageFormatException:
-        return jsonify({"error": "Invalid image format"}), 400
+        return jsonify({"error": "Invalid image format", "detail": "The image format is not supported by AWS Rekognition"}), 400
+    except rekognition_client.exceptions.InvalidParameterException as e:
+        return jsonify({"error": "Invalid parameter", "detail": str(e)}), 400
+    except rekognition_client.exceptions.ProvisionedThroughputExceededException:
+        return jsonify({"error": "AWS throttling", "detail": "AWS Rekognition request rate limit exceeded. Please try again later."}), 429
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Search faces failed", "detail": str(e)}), 500
 
-@app.route('/api/detect-labels', methods=['POST'])
 def validate_file(file):
     # Check if file exists
     if not file:

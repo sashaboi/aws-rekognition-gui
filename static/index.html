@@ -14,6 +14,7 @@
         <header>
             <h1>AWS Rekognition GUI</h1>
             <div id="status-banner"></div>
+
         </header>
 
         <section id="credentials-section" class="section">
@@ -42,12 +43,7 @@
                         <option value="ap-south-1">Asia Pacific (Mumbai) - ap-south-1</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="save-credentials">
-                        Save credentials locally
-                    </label>
-                </div>
+
                 <button type="submit">Set Credentials</button>
             </form>
         </section>
@@ -60,7 +56,24 @@
             </div>
 
             <div id="collections" class="tab-content active">
-                <button id="list-collections-btn">List Collections</button>
+                <div class="collections-actions">
+                    <button id="list-collections-btn">List Collections</button>
+                    <button id="create-collection-toggle-btn">Create New Collection</button>
+                </div>
+                
+                <div id="create-collection-form" class="form-panel hidden">
+                    <h3>Create New Collection</h3>
+                    <form id="collection-create-form">
+                        <div class="form-group">
+                            <label for="new-collection-id">Collection ID:</label>
+                            <input type="text" id="new-collection-id" required placeholder="Enter a unique collection ID">
+                            <small>Collection ID must be alphanumeric with hyphens (no spaces)</small>
+                        </div>
+                        <button type="submit">Create Collection</button>
+                        <button type="button" id="cancel-create-btn">Cancel</button>
+                    </form>
+                </div>
+                
                 <div id="collections-list"></div>
             </div>
 
@@ -68,7 +81,12 @@
                 <form id="search-faces-form">
                     <div class="form-group">
                         <label for="collection-id">Collection ID:</label>
-                        <input type="text" id="collection-id" required>
+                        <select id="collection-id" class="form-control" required>
+                            <option value="">-- Select a collection --</option>
+                        </select>
+                        <button type="button" id="refresh-collections-btn" class="small-btn" style="margin-top: 8px;">
+                            <i class="fas fa-sync"></i> Refresh Collections
+                        </button>
                     </div>
                     <div class="form-group">
                         <label for="face-image">Upload Image:</label>
@@ -89,6 +107,20 @@
                 </form>
                 <div id="labels-results"></div>
             </div>
+        </section>
+        <section id="logs-section" class="section hidden">
+            <div class="logs-header">
+                <h3>Logs</h3>
+                <div class="logs-buttons">
+                    <button id="copy-logs-btn" class="small-btn" title="Copy logs to clipboard">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                    <button id="dismiss-logs-btn" class="small-btn" title="Dismiss logs">
+                        <i class="fas fa-times"></i> Dismiss
+                    </button>
+                </div>
+            </div>
+            <div id="logs-content" class="logs-content"></div>
         </section>
     </div>
 

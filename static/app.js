@@ -1,8 +1,10 @@
 // Global variables
 let statusBanner;
 let credentialsForm;
+let credentialsSection;
 let operationsSection;
-let saveCredentialsCheckbox;
+let logsSection;
+let logsContent;
 
 // Status elements
 let internetStatus;
@@ -83,73 +85,61 @@ function updateApiStatus(status, operation = '') {
     }
 }
 
-// Credentials storage key
-// Encryption key for credentials (generated on load)
-let encryptionKey;
-
-// Generate a random encryption key
-function generateEncryptionKey() {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-// Encrypt data
-async function encryptData(data) {
-    const encoder = new TextEncoder();
-    const dataBuffer = encoder.encode(JSON.stringify(data));
-    const keyBuffer = encoder.encode(encryptionKey);
-    const cryptoKey = await crypto.subtle.importKey(
-        'raw',
-        keyBuffer,
-        { name: 'AES-GCM' },
-        false,
-        ['encrypt']
-    );
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encryptedData = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        cryptoKey,
-        dataBuffer
-    );
-    return {
-        iv: Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join(''),
-        data: Array.from(new Uint8Array(encryptedData)).map(b => b.toString(16).padStart(2, '0')).join('')
-    };
-}
-
-// Decrypt data
-async function decryptData(encrypted) {
+// Function to load collections for the dropdown
+async function loadCollectionsForDropdown() {
+    const collectionIdSelect = document.getElementById('collection-id');
+    if (!collectionIdSelect) return;
+    
+    // Save current selection if any
+    const currentSelection = collectionIdSelect.value;
+    
+    // Clear dropdown except for the placeholder
+    while (collectionIdSelect.options.length > 1) {
+        collectionIdSelect.remove(1);
+    }
+    
+    // Show loading state
+    const placeholder = collectionIdSelect.options[0];
+    placeholder.text = 'Loading collections...';
+    
     try {
-        const encoder = new TextEncoder();
-        const keyBuffer = encoder.encode(encryptionKey);
-        const cryptoKey = await crypto.subtle.importKey(
-            'raw',
-            keyBuffer,
-            { name: 'AES-GCM' },
-            false,
-            ['decrypt']
-        );
-        const iv = new Uint8Array(encrypted.iv.match(/.{2}/g).map(byte => parseInt(byte, 16)));
-        const data = new Uint8Array(encrypted.data.match(/.{2}/g).map(byte => parseInt(byte, 16)));
-        const decryptedBuffer = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv },
-            cryptoKey,
-            data
-        );
-        return JSON.parse(new TextDecoder().decode(decryptedBuffer));
+        const response = await fetch('/api/collections');
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Reset placeholder
+            placeholder.text = '-- Select a collection --';
+            
+            if (data.CollectionIds && data.CollectionIds.length > 0) {
+                // Add each collection to the dropdown
+                data.CollectionIds.forEach(collectionId => {
+                    const option = document.createElement('option');
+                    option.value = collectionId;
+                    option.text = collectionId;
+                    collectionIdSelect.add(option);
+                });
+                
+                logMessage(`Loaded ${data.CollectionIds.length} collections for selection`, 'success');
+                
+                // Restore previous selection if it exists
+                if (currentSelection && data.CollectionIds.includes(currentSelection)) {
+                    collectionIdSelect.value = currentSelection;
+                }
+            } else {
+                logMessage('No collections found. Please create a collection in AWS Rekognition first.');
+            }
+        } else {
+            placeholder.text = '-- Error loading collections --';
+            throw new Error(data.error || 'Failed to load collections');
+        }
     } catch (error) {
-        console.error('Failed to decrypt credentials');
-        return null;
+        placeholder.text = '-- Error loading collections --';
+        logMessage(`Failed to load collections: ${error.message}`, 'error');
     }
 }
 
-const CREDS_STORAGE_KEY = 'aws_rekognition_credentials_encrypted';
-
 // Initialize the application
 document.addEventListener('DOMContentLoaded', async () => {
-    // Generate encryption key on load
-    encryptionKey = generateEncryptionKey();
     await initializeApp();
     setupEventListeners();
     startHealthCheck();
@@ -173,45 +163,41 @@ async function initializeApp() {
     // Initialize DOM elements
     statusBanner = document.getElementById('status-banner');
     credentialsForm = document.getElementById('credentials-form');
+    credentialsSection = document.getElementById('credentials-section');
     operationsSection = document.getElementById('operations-section');
-    saveCredentialsCheckbox = document.getElementById('save-credentials');
-    
+    logsSection = document.getElementById('logs-section');
+    logsContent = document.getElementById('logs-content');
+
     // Status elements
     internetStatus = document.getElementById('internet-status');
     awsStatus = document.getElementById('aws-status');
     apiStatus = document.getElementById('api-status');
-    
+
     // Log any missing elements for debugging
-    const elements = { statusBanner, credentialsForm, operationsSection, saveCredentialsCheckbox, internetStatus, awsStatus, apiStatus };
+    const elements = { statusBanner, credentialsForm, credentialsSection, operationsSection, internetStatus, awsStatus, apiStatus };
     for (const [name, element] of Object.entries(elements)) {
         if (!element) {
             console.error(`Element not found: ${name}`);
         }
     }
-    
+
+    // Check if AWS is already connected on the backend
     try {
-        // Check for saved credentials
-        const saved = localStorage.getItem(CREDS_STORAGE_KEY);
-        if (saved) {
-            const encrypted = JSON.parse(saved);
-            try {
-                const credentials = await decryptData(encrypted);
-                // Auto-fill the form
-                const accessKeyInput = document.getElementById('access-key');
-                const secretKeyInput = document.getElementById('secret-key');
-                const regionSelect = document.getElementById('region');
-                
-                if (accessKeyInput) accessKeyInput.value = credentials.accessKey;
-                if (secretKeyInput) secretKeyInput.value = credentials.secretKey;
-                if (regionSelect) regionSelect.value = credentials.region;
-                if (saveCredentialsCheckbox) saveCredentialsCheckbox.checked = true;
-            } catch (error) {
-                // If decryption fails, clear saved credentials
-                localStorage.removeItem(CREDS_STORAGE_KEY);
-            }
+        const response = await fetch('/health');
+        const data = await response.json();
+
+        if (data.aws_status === 'connected') {
+            // If AWS is already connected, show the operations section
+            credentialsSection.classList.add('hidden');
+            operationsSection.classList.remove('hidden');
+            updateAwsStatus(true);
+            
+            // Load collections for the dropdown
+            await loadCollectionsForDropdown();
         }
     } catch (error) {
-        console.error('Error initializing app:', error);
+        console.error('Error checking connection status:', error);
+        // Default to showing credentials form if there's an error
     }
 }
 
@@ -219,6 +205,55 @@ function setupEventListeners() {
     if (!credentialsForm) {
         console.error('Credentials form not found');
         return;
+    }
+    
+    // Set up logs buttons
+    const copyLogsBtn = document.getElementById('copy-logs-btn');
+    const dismissLogsBtn = document.getElementById('dismiss-logs-btn');
+    const refreshCollectionsBtn = document.getElementById('refresh-collections-btn');
+    const createCollectionToggleBtn = document.getElementById('create-collection-toggle-btn');
+    const cancelCreateBtn = document.getElementById('cancel-create-btn');
+    const collectionCreateForm = document.getElementById('collection-create-form');
+    
+    if (copyLogsBtn) {
+        copyLogsBtn.addEventListener('click', copyLogs);
+    }
+    
+    if (dismissLogsBtn) {
+        dismissLogsBtn.addEventListener('click', clearLogs);
+    }
+    
+    if (refreshCollectionsBtn) {
+        refreshCollectionsBtn.addEventListener('click', loadCollectionsForDropdown);
+    }
+    
+    // Collection creation form toggle
+    if (createCollectionToggleBtn) {
+        createCollectionToggleBtn.addEventListener('click', () => {
+            const formPanel = document.getElementById('create-collection-form');
+            if (formPanel) {
+                formPanel.classList.remove('hidden');
+                document.getElementById('new-collection-id').focus();
+            }
+        });
+    }
+    
+    if (cancelCreateBtn) {
+        cancelCreateBtn.addEventListener('click', () => {
+            const formPanel = document.getElementById('create-collection-form');
+            if (formPanel) {
+                formPanel.classList.add('hidden');
+                document.getElementById('new-collection-id').value = '';
+            }
+        });
+    }
+    
+    // Collection creation form submission
+    if (collectionCreateForm) {
+        collectionCreateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await createCollection();
+        });
     }
 
     // Handle credentials submission
@@ -334,6 +369,9 @@ async function checkHealth() {
 }
 
 async function setCredentials(credentials) {
+    // Clear previous logs
+    clearLogs();
+    
     updateApiStatus('loading', 'Setting credentials');
     try {
         const response = await fetch('/api/set-credentials', {
@@ -349,23 +387,25 @@ async function setCredentials(credentials) {
         if (response.ok) {
             credentialsSection.classList.add('hidden');
             operationsSection.classList.remove('hidden');
-
-            if (saveCredentialsCheckbox.checked) {
-                const encrypted = await encryptData(credentials);
-                localStorage.setItem(CREDS_STORAGE_KEY, JSON.stringify(encrypted));
-            } else {
-                localStorage.removeItem(CREDS_STORAGE_KEY);
-            }
-
+            
+            // Start the health check
             startHealthCheck();
+            
             updateApiStatus('success', 'Setting credentials');
+            updateAwsStatus(true);
+            logMessage('AWS credentials set successfully', 'success');
         } else {
-            updateApiStatus('error', 'Setting credentials');
+            // Log the detailed error message if available
+            if (data.detail) {
+                logMessage(`Error: ${data.detail}`, 'error');
+            }
             throw new Error(data.error || 'Failed to set credentials');
         }
     } catch (error) {
         updateApiStatus('error', 'Setting credentials');
+        updateAwsStatus(false);
         showError(error.message);
+        logMessage(`Failed to set credentials: ${error.message}`, 'error');
     }
 }
 
@@ -380,36 +420,103 @@ async function listCollections() {
             collectionsList.innerHTML = '';
 
             if (data.CollectionIds && data.CollectionIds.length > 0) {
+                logMessage(`Found ${data.CollectionIds.length} collections`, 'success');
                 data.CollectionIds.forEach(async (collectionId) => {
-                    const details = await getCollectionDetails(collectionId);
                     const collectionDiv = document.createElement('div');
                     collectionDiv.className = 'result-item';
+                    
+                    // Get collection details
+                    const details = await getCollectionDetails(collectionId);
+                    logMessage(`Collection: ${collectionId}, Face Count: ${details.FaceCount}`);
+                    
                     collectionDiv.innerHTML = `
-                        <h3>${collectionId}</h3>
-                        <p>Face Count: ${details.FaceCount}</p>
-                        <p>Created: ${new Date(details.CreationTimestamp).toLocaleString()}</p>
+                        <p><strong>Collection ID:</strong> ${collectionId}</p>
+                        <p><strong>Face Count:</strong> ${details.FaceCount}</p>
+                        <p><strong>Created:</strong> ${new Date(details.CreationTimestamp).toLocaleString()}</p>
                     `;
                     collectionsList.appendChild(collectionDiv);
                 });
             } else {
                 collectionsList.innerHTML = '<p>No collections found</p>';
+                logMessage('No collections found');
             }
             updateApiStatus('success', 'Listing collections');
         } else {
-            updateApiStatus('error', 'Listing collections');
+            logMessage(`Error: ${data.error || 'Failed to list collections'}`, 'error');
             throw new Error(data.error || 'Failed to list collections');
         }
     } catch (error) {
         updateApiStatus('error', 'Listing collections');
         showError(error.message);
+        logMessage(`Failed to list collections: ${error.message}`, 'error');
     }
 }
 
-async function getCollectionDetails(collectionId) {
+async function createCollection() {
+    // Clear previous logs
+    clearLogs();
+    
+    const newCollectionId = document.getElementById('new-collection-id').value.trim();
+    
+    if (!newCollectionId) {
+        updateStatusBanner('Please enter a collection ID', 'error');
+        logMessage('Error: Collection ID is required', 'error');
+        return;
+    }
+    
+    updateApiStatus('loading', 'Creating collection');
+    logMessage(`Creating collection: ${newCollectionId}`);
+    
     try {
-        const response = await fetch(`/api/collections/${collectionId}`);
+        const response = await fetch('/api/collections', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ collectionId: newCollectionId })
+        });
+
         const data = await response.json();
-        return data;
+
+        if (response.ok) {
+            // Reset form and hide it
+            document.getElementById('new-collection-id').value = '';
+            document.getElementById('create-collection-form').classList.add('hidden');
+            
+            // Update UI
+            updateApiStatus('success', 'Creating collection');
+            logMessage(`Collection '${newCollectionId}' created successfully with ARN: ${data.collectionArn}`, 'success');
+            
+            // Refresh collections list and dropdown
+            await listCollections();
+            await loadCollectionsForDropdown();
+        } else {
+            updateApiStatus('error', 'Creating collection');
+            
+            // Log the detailed error message if available
+            if (data.detail) {
+                logMessage(`Error: ${data.detail}`, 'error');
+            }
+            
+            throw new Error(data.error || 'Failed to create collection');
+        }
+    } catch (error) {
+        updateApiStatus('error', 'Creating collection');
+        showError(error.message);
+        logMessage(`Create collection operation failed: ${error.message}`, 'error');
+    }
+}
+
+function getCollectionDetails(collectionId) {
+    try {
+        return fetch(`/api/collections/${collectionId}`)
+            .then(response => response.json())
+            .then(data => {
+                return {
+                    FaceCount: data.FaceCount || 'N/A',
+                    CreationTimestamp: new Date(data.CreationTimestamp || Date.now()).toLocaleString()
+                };
+            });
     } catch (error) {
         console.error('Error fetching collection details:', error);
         return { FaceCount: 'N/A', CreationTimestamp: 'N/A' };
@@ -417,11 +524,21 @@ async function getCollectionDetails(collectionId) {
 }
 
 async function searchFaces() {
+    // Clear previous logs
+    clearLogs();
+    
     const collectionId = document.getElementById('collection-id').value;
     const imageFile = document.getElementById('face-image').files[0];
 
+    if (!collectionId) {
+        updateStatusBanner('Please select a collection', 'error');
+        logMessage('Error: No collection selected', 'error');
+        return;
+    }
+
     if (!imageFile) {
         updateStatusBanner('Please select an image', 'error');
+        logMessage('Error: No image selected', 'error');
         return;
     }
 
@@ -430,6 +547,8 @@ async function searchFaces() {
     formData.append('collectionId', collectionId);
 
     updateApiStatus('loading', 'Searching faces');
+    logMessage(`Searching for faces in collection: ${collectionId}`);
+    
     try {
         const response = await fetch('/api/search-faces', {
             method: 'POST',
@@ -443,6 +562,8 @@ async function searchFaces() {
             searchResults.innerHTML = '';
 
             if (data.FaceMatches && data.FaceMatches.length > 0) {
+                logMessage(`Found ${data.FaceMatches.length} matching faces`, 'success');
+                
                 data.FaceMatches.forEach(match => {
                     const matchDiv = document.createElement('div');
                     matchDiv.className = 'result-item';
@@ -451,18 +572,28 @@ async function searchFaces() {
                         <p>Face ID: ${match.Face.FaceId}</p>
                     `;
                     searchResults.appendChild(matchDiv);
+                    
+                    logMessage(`Match: Face ID ${match.Face.FaceId} with ${match.Similarity.toFixed(2)}% similarity`);
                 });
             } else {
                 searchResults.innerHTML = '<p>No matching faces found</p>';
+                logMessage('No matching faces found in the collection');
             }
             updateApiStatus('success', 'Searching faces');
         } else {
             updateApiStatus('error', 'Searching faces');
+            
+            // Log the detailed error message if available
+            if (data.detail) {
+                logMessage(`Error: ${data.detail}`, 'error');
+            }
+            
             throw new Error(data.error || 'Face search failed');
         }
     } catch (error) {
         updateApiStatus('error', 'Searching faces');
         showError(error.message);
+        logMessage(`Search faces operation failed: ${error.message}`, 'error');
     }
 }
 
@@ -530,7 +661,7 @@ function updateStatusBanner(message, type) {
         console.error('Status banner element not found');
         return;
     }
-    
+
     statusBanner.textContent = message;
     statusBanner.className = type;
     statusBanner.classList.add(type);
@@ -539,4 +670,59 @@ function updateStatusBanner(message, type) {
 
 function showError(message) {
     updateStatusBanner(message, 'error');
+}
+
+function logMessage(message, type = 'info') {
+    if (!logsContent) return;
+    
+    // Make logs section visible
+    if (logsSection) {
+        logsSection.classList.remove('hidden');
+    }
+    
+    // Create log entry
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = document.createElement('div');
+    logEntry.className = type;
+    logEntry.textContent = `[${timestamp}] ${message}`;
+    
+    // Add to logs
+    logsContent.appendChild(logEntry);
+    
+    // Auto-scroll to bottom
+    logsContent.scrollTop = logsContent.scrollHeight;
+}
+
+function clearLogs() {
+    if (logsContent) {
+        logsContent.innerHTML = '';
+    }
+    
+    if (logsSection) {
+        logsSection.classList.add('hidden');
+    }
+}
+
+function copyLogs() {
+    if (!logsContent) return;
+    
+    // Get all log text
+    const logText = Array.from(logsContent.children)
+        .map(entry => entry.textContent)
+        .join('\n');
+    
+    if (logText.trim() === '') {
+        logMessage('No logs to copy', 'warning');
+        return;
+    }
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(logText)
+        .then(() => {
+            logMessage('Logs copied to clipboard', 'success');
+        })
+        .catch(err => {
+            console.error('Failed to copy logs:', err);
+            logMessage('Failed to copy logs to clipboard', 'error');
+        });
 }

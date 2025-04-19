@@ -229,3 +229,110 @@ button:hover {
 .container {
     margin-bottom: 60px;
 }
+
+/* Logs section styles */
+#logs-section {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+#logs-section h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #495057;
+}
+
+.logs-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.small-btn {
+    background-color: var(--light-gray);
+    color: var(--dark-gray);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.small-btn:hover {
+    background-color: #e2e6ea;
+}
+
+#copy-logs-btn {
+    color: var(--primary-color);
+}
+
+#dismiss-logs-btn {
+    color: var(--danger-color);
+}
+
+.logs-content {
+    background-color: #343a40;
+    color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.logs-content .error {
+    color: #dc3545;
+}
+
+.logs-content .success {
+    color: #28a745;
+}
+
+/* Collections styles */
+.collections-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.form-panel {
+    background-color: var(--light-gray);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.form-panel h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 16px;
+}
+
+.form-panel small {
+    display: block;
+    color: var(--secondary-color);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+#cancel-create-btn {
+    background-color: var(--secondary-color);
+    margin-left: 10px;
+}
